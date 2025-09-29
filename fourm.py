@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Database setup - UPDATED to fix the error
+# Database setup
 def setup_database():
     conn = sqlite3.connect('forum.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -45,7 +45,7 @@ def setup_database():
         )
     ''')
     
-    # Posts table - FIXED: Added image_path column properly
+    # Posts table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -197,38 +197,50 @@ def format_content(content):
     formatted = content.replace('\n', '  \n')
     return formatted
 
-# Rich Text Editor Component
+# Rich Text Editor Component - UPDATED: Form se bahar
 def rich_text_editor(key="editor", default_content=""):
     """A rich text editor using Streamlit components"""
     
     st.markdown("**Post Editor** - Use the formatting options below:")
     
-    # Formatting buttons
+    # Formatting buttons - Form ke bahar hain
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
-        if st.button("**Bold**", key=f"bold_{key}"):
-            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " **bold text** "
+        if st.button("**Bold**", key=f"bold_{key}", use_container_width=True):
+            current_content = st.session_state.get(f'editor_{key}', default_content)
+            st.session_state[f'editor_{key}'] = current_content + " **bold text** "
+            st.rerun()
     
     with col2:
-        if st.button("*Italic*", key=f"italic_{key}"):
-            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " *italic text* "
+        if st.button("*Italic*", key=f"italic_{key}", use_container_width=True):
+            current_content = st.session_state.get(f'editor_{key}', default_content)
+            st.session_state[f'editor_{key}'] = current_content + " *italic text* "
+            st.rerun()
     
     with col3:
-        if st.button("`Code`", key=f"code_{key}"):
-            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " `code` "
+        if st.button("`Code`", key=f"code_{key}", use_container_width=True):
+            current_content = st.session_state.get(f'editor_{key}', default_content)
+            st.session_state[f'editor_{key}'] = current_content + " `code` "
+            st.rerun()
     
     with col4:
-        if st.button("📋 List", key=f"list_{key}"):
-            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + "\n- List item 1\n- List item 2\n- List item 3\n"
+        if st.button("📋 List", key=f"list_{key}", use_container_width=True):
+            current_content = st.session_state.get(f'editor_{key}', default_content)
+            st.session_state[f'editor_{key}'] = current_content + "\n- List item 1\n- List item 2\n- List item 3\n"
+            st.rerun()
     
     with col5:
-        if st.button("1. Number", key=f"number_{key}"):
-            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + "\n1. First item\n2. Second item\n3. Third item\n"
+        if st.button("1. Number", key=f"number_{key}", use_container_width=True):
+            current_content = st.session_state.get(f'editor_{key}', default_content)
+            st.session_state[f'editor_{key}'] = current_content + "\n1. First item\n2. Second item\n3. Third item\n"
+            st.rerun()
     
     with col6:
-        if st.button("🔗 Link", key=f"link_{key}"):
-            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " [link text](http://url.com) "
+        if st.button("🔗 Link", key=f"link_{key}", use_container_width=True):
+            current_content = st.session_state.get(f'editor_{key}', default_content)
+            st.session_state[f'editor_{key}'] = current_content + " [link text](http://url.com) "
+            st.rerun()
     
     # Editor area
     content = st.text_area(
@@ -525,19 +537,20 @@ def show_create_post():
     category_names = [cat[1] for cat in categories]
     category_ids = [cat[0] for cat in categories]
     
+    # Rich Text Editor - Form se pehle
+    content = rich_text_editor("create", st.session_state.editor_create)
+    
+    # Image upload section
+    st.subheader("🖼️ Add Featured Image")
+    uploaded_image = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg', 'gif'], key="create_image")
+    
+    if uploaded_image:
+        st.image(uploaded_image, caption="Preview", width=300)
+    
+    # Form for basic post details
     with st.form("create_post_form", clear_on_submit=False):
         title = st.text_input("Post Title", placeholder="Enter a descriptive title for your post")
         category = st.selectbox("Category", category_names)
-        
-        # Rich Text Editor
-        content = rich_text_editor("create", st.session_state.editor_create)
-        
-        # Image upload
-        st.subheader("🖼️ Add Featured Image")
-        uploaded_image = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg', 'gif'], key="create_image")
-        
-        if uploaded_image:
-            st.image(uploaded_image, caption="Preview", width=300)
         
         submit = st.form_submit_button("Create Post", type="primary")
         
@@ -612,29 +625,30 @@ def show_edit_post():
     if f'editor_edit' not in st.session_state or st.session_state.editor_edit == "":
         st.session_state.editor_edit = post[4]
     
+    # Rich Text Editor - Form se pehle
+    content = rich_text_editor("edit", st.session_state.editor_edit)
+    
+    # Current image
+    if post[9]:  # image_path
+        st.subheader("Current Featured Image")
+        display_image(post[9], width=300)
+        
+        # Option to remove image
+        remove_image = st.checkbox("Remove current image")
+    else:
+        remove_image = False
+    
+    # New image upload
+    st.subheader("Update Featured Image")
+    uploaded_image = st.file_uploader("Upload New Image", type=['png', 'jpg', 'jpeg', 'gif'], key="edit_image")
+    
+    if uploaded_image:
+        st.image(uploaded_image, caption="New Image Preview", width=300)
+    
+    # Form for basic post details
     with st.form("edit_post_form"):
         title = st.text_input("Post Title", value=post[3])
         category = st.selectbox("Category", category_names, index=category_names.index(current_category_name) if current_category_name else 0)
-        
-        # Rich Text Editor
-        content = rich_text_editor("edit", st.session_state.editor_edit)
-        
-        # Current image
-        if post[9]:  # image_path
-            st.subheader("Current Featured Image")
-            display_image(post[9], width=300)
-            
-            # Option to remove image
-            remove_image = st.checkbox("Remove current image")
-        else:
-            remove_image = False
-        
-        # New image upload
-        st.subheader("Update Featured Image")
-        uploaded_image = st.file_uploader("Upload New Image", type=['png', 'jpg', 'jpeg', 'gif'], key="edit_image")
-        
-        if uploaded_image:
-            st.image(uploaded_image, caption="New Image Preview", width=300)
         
         submit = st.form_submit_button("Update Post", type="primary")
         
@@ -833,7 +847,7 @@ def show_view_post():
     
     conn.close()
 
-# ... (Other functions remain the same as previous version - profile, admin, category, search)
+# ... (Other functions remain the same - profile, admin, category, search)
 
 def show_profile():
     if not st.session_state.user:
