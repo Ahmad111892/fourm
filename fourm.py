@@ -289,7 +289,9 @@ def show_home():
                     
                     st.write(f"👤 **{post[9]}** | 📂 **{post[10]}** | 👁️ **{post[7]}** | 💬 **{post[12]}**")
                     st.write(f"🕒 {post[5]}")
-                    st.write(post[4][:200] + "...")
+                    # Display content with proper line breaks
+                    content_display = post[4].replace('\n', '  \n')
+                    st.write(content_display[:200] + "...")
                 
                 with col2:
                     if st.button("Read More", key=f"read_{post[0]}"):
@@ -321,13 +323,16 @@ def show_login():
         submit = st.form_submit_button("Login")
         
         if submit:
-            if login_user(username, password):
-                st.success("Login successful!")
-                st.session_state.page = 'home'
-                time.sleep(1)
-                st.rerun()
+            if username and password:
+                if login_user(username, password):
+                    st.success("Login successful!")
+                    st.session_state.page = 'home'
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password!")
             else:
-                st.error("Invalid username or password!")
+                st.error("Please enter both username and password!")
     
     if st.button("← Back to Home"):
         st.session_state.page = 'home'
@@ -344,7 +349,9 @@ def show_register():
         submit = st.form_submit_button("Register")
         
         if submit:
-            if password != confirm_password:
+            if not all([username, email, password, confirm_password]):
+                st.error("Please fill in all fields!")
+            elif password != confirm_password:
                 st.error("Passwords do not match!")
             elif len(password) < 6:
                 st.error("Password must be at least 6 characters!")
@@ -369,9 +376,9 @@ def show_create_post():
     category_ids = [cat[0] for cat in categories]
     
     with st.form("create_post_form"):
-        title = st.text_input("Post Title")
+        title = st.text_input("Post Title", placeholder="Enter a descriptive title for your post")
         category = st.selectbox("Category", category_names)
-        content = st.text_area("Content", height=200)
+        content = st.text_area("Content", height=200, placeholder="Write your post content here...\nYou can use line breaks for better formatting.")
         submit = st.form_submit_button("Create Post")
         
         if submit:
@@ -390,7 +397,7 @@ def show_create_post():
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Please fill in all fields!")
+                st.error("Please fill in both title and content!")
     
     if st.button("← Back to Home"):
         st.session_state.page = 'home'
@@ -524,7 +531,11 @@ def show_view_post():
                 st.rerun()
     
     st.divider()
-    st.write(post[4])
+    
+    # Display content with proper line breaks
+    content_display = post[4].replace('\n', '  \n')
+    st.write(content_display)
+    
     st.divider()
     
     # Comments section
@@ -548,7 +559,8 @@ def show_view_post():
                 col1, col2 = st.columns([4, 1])
                 with col1:
                     st.write(f"**{comment[6]}** - {comment[4]}")
-                    st.write(comment[3])
+                    comment_content = comment[3].replace('\n', '  \n')
+                    st.write(comment_content)
                 with col2:
                     # Delete comment button for comment owners and admins
                     if st.session_state.user and (st.session_state.user['id'] == comment[2] or st.session_state.user['role'] == 'admin'):
@@ -645,7 +657,8 @@ def show_profile():
         for post in posts:
             with st.container():
                 st.write(f"**{post[3]}** (in {post[9]})")
-                st.write(post[4][:100] + "...")
+                content_preview = post[4].replace('\n', ' ')[:100] + "..."
+                st.write(content_preview)
                 if st.button("View", key=f"view_my_post_{post[0]}"):
                     st.session_state.page = 'view_post'
                     st.session_state.current_post = post[0]
@@ -716,7 +729,9 @@ def show_admin():
         with col1:
             st.write(f"**{user[1]}**")
         with col2:
-            st.write(user[2])
+            # Hide email for privacy - show only first 3 characters
+            email_display = user[2][:3] + "***" + user[2].split('@')[1] if '@' in user[2] else "***"
+            st.write(email_display)
         with col3:
             st.write(user[3])
         with col4:
@@ -767,7 +782,8 @@ def show_category():
                 with col1:
                     st.write(f"**{post[3]}**")
                     st.write(f"👤 **{post[9]}** | 👁️ **{post[7]}** | 🕒 **{post[5]}**")
-                    st.write(post[4][:200] + "...")
+                    content_preview = post[4].replace('\n', ' ')[:200] + "..."
+                    st.write(content_preview)
                 with col2:
                     if st.button("Read More", key=f"cat_read_{post[0]}"):
                         st.session_state.page = 'view_post'
@@ -802,7 +818,8 @@ def show_search():
                 with col1:
                     st.write(f"**{post[3]}**")
                     st.write(f"👤 **{post[9]}** | 📂 **{post[10]}** | 👁️ **{post[7]}** | 🕒 **{post[5]}**")
-                    st.write(post[4][:200] + "...")
+                    content_preview = post[4].replace('\n', ' ')[:200] + "..."
+                    st.write(content_preview)
                 with col2:
                     if st.button("Read More", key=f"search_read_{post[0]}"):
                         st.session_state.page = 'view_post'
@@ -860,9 +877,8 @@ with st.sidebar:
             st.rerun()
     
     st.divider()
-    st.write("**Default Admin Login:**")
-    st.write("Username: `admin`")
-    st.write("Password: `admin123`")
+    st.write("**Need Help?**")
+    st.write("Contact forum administrator")
 
 # Main content based on current page
 if st.session_state.page == 'home':
