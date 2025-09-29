@@ -3,6 +3,10 @@ import sqlite3
 import hashlib
 from datetime import datetime
 import time
+import os
+import base64
+from PIL import Image
+import io
 
 # Page configuration
 st.set_page_config(
@@ -26,7 +30,8 @@ def setup_database():
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            bio TEXT DEFAULT ''
+            bio TEXT DEFAULT '',
+            avatar TEXT DEFAULT NULL
         )
     ''')
     
@@ -52,6 +57,7 @@ def setup_database():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             views INTEGER DEFAULT 0,
             is_pinned BOOLEAN DEFAULT 0,
+            image_path TEXT DEFAULT NULL,
             FOREIGN KEY (user_id) REFERENCES users (id),
             FOREIGN KEY (category_id) REFERENCES categories (id)
         )
@@ -66,6 +72,7 @@ def setup_database():
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             parent_id INTEGER DEFAULT NULL,
+            image_path TEXT DEFAULT NULL,
             FOREIGN KEY (post_id) REFERENCES posts (id),
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
@@ -77,7 +84,8 @@ def setup_database():
         (1, 'General', 'General discussions', '#667eea'),
         (2, 'Questions', 'Ask questions here', '#4CAF50'),
         (3, 'Suggestions', 'Share your ideas', '#FF9800'),
-        (4, 'Method', 'Helping For Peoples', '#F44336')
+        (4, 'Methods', 'Helping For Peoples', '#F44336'),
+        (5, 'Tutorials', 'Step by step guides', '#9C27B0')
     ''')
     
     # Create admin user if not exists
@@ -92,6 +100,13 @@ def setup_database():
 
 # Initialize database
 setup_database()
+
+# Create uploads directory if not exists
+if not os.path.exists('uploads'):
+    os.makedirs('uploads')
+    os.makedirs('uploads/posts')
+    os.makedirs('uploads/comments')
+    os.makedirs('uploads/avatars')
 
 # Utility functions
 def hash_password(password):
@@ -122,7 +137,7 @@ def get_category_posts(category_id):
         JOIN users u ON p.user_id = u.id
         JOIN categories c ON p.category_id = c.id
         WHERE p.category_id = ?
-        ORDER BY p.created_at DESC
+        ORDER BY p.is_pinned DESC, p.created_at DESC
     ''', (category_id,))
     posts = cursor.fetchall()
     conn.close()
@@ -136,12 +151,54 @@ def search_posts(query):
         FROM posts p
         JOIN users u ON p.user_id = u.id
         JOIN categories c ON p.category_id = c.id
-        WHERE p.title LIKE ? OR p.content LIKE ? OR u.username LIKE ?
+        WHERE p.title LIKE ? OR p.content LIKE ? OR u.username LIKE ? OR c.name LIKE ?
         ORDER BY p.created_at DESC
-    ''', (f'%{query}%', f'%{query}%', f'%{query}%'))
+    ''', (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%'))
     results = cursor.fetchall()
     conn.close()
     return results
+
+def save_uploaded_image(uploaded_file, folder='posts'):
+    """Save uploaded image and return file path"""
+    if uploaded_file is not None:
+        # Generate unique filename
+        file_extension = uploaded_file.name.split('.')[-1]
+        filename = f"{int(time.time())}_{hashlib.md5(uploaded_file.name.encode()).hexdigest()[:8]}.{file_extension}"
+        file_path = os.path.join('uploads', folder, filename)
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        
+        return file_path
+    return None
+
+def display_image(image_path, width=400):
+    """Display image in Streamlit"""
+    if image_path and os.path.exists(image_path):
+        image = Image.open(image_path)
+        st.image(image, width=width, caption="Attached Image")
+    elif image_path:
+        st.warning("Image not found")
+
+def format_content(content):
+    """Format content with proper line breaks and code formatting"""
+    lines = content.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        if line.strip().startswith('```') and line.strip().endswith('```'):
+            # Code block
+            code_content = line.strip()[3:-3]  # Remove ```
+            formatted_lines.append(f"`{code_content}`")
+        elif '`' in line:
+            # Inline code
+            formatted_lines.append(line)
+        else:
+            # Regular text with proper line breaks
+            formatted_lines.append(line)
+    
+    return '  \n'.join(formatted_lines)
 
 # Session state initialization
 if 'user' not in st.session_state:
@@ -210,17 +267,22 @@ def logout_user():
 def show_home():
     st.title("💬 Advanced Forum")
     
-    # Search bar
-    col1, col2 = st.columns([3, 1])
+    # Search bar with improved layout
+    st.subheader("🔍 Search Posts")
+    col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
-        search_query = st.text_input("🔍 Search posts...", placeholder="Search by title, content, or username")
+        search_query = st.text_input("Search...", placeholder="Search by title, content, username or category", label_visibility="collapsed")
     with col2:
-        if st.button("Search", use_container_width=True):
-            if search_query:
-                st.session_state.search_query = search_query
-                st.session_state.page = 'search'
-            else:
-                st.session_state.search_query = ''
+        search_btn = st.button("🔍 Search", use_container_width=True)
+    with col3:
+        if st.button("🔄 Clear", use_container_width=True):
+            st.session_state.search_query = ''
+            st.rerun()
+    
+    if search_btn and search_query:
+        st.session_state.search_query = search_query
+        st.session_state.page = 'search'
+        st.rerun()
     
     # Stats
     conn = sqlite3.connect('forum.db', check_same_thread=False)
@@ -244,24 +306,32 @@ def show_home():
     with col3:
         st.metric("💬 Total Comments", total_comments)
     
-    # Categories
+    # Categories with better styling
     st.subheader("📂 Categories")
     categories = get_categories()
+    
+    # Create columns for categories
     cols = st.columns(len(categories))
     for idx, cat in enumerate(categories):
         with cols[idx]:
             cursor.execute('SELECT COUNT(*) FROM posts WHERE category_id = ?', (cat[0],))
             post_count = cursor.fetchone()[0]
-            if st.button(
-                f"{cat[1]}\n({post_count} posts)",
-                key=f"cat_{cat[0]}",
-                use_container_width=True
-            ):
+            
+            # Custom CSS for category buttons
+            st.markdown(f"""
+                <div style='border: 2px solid {cat[3]}; border-radius: 10px; padding: 15px; text-align: center; margin: 5px;'>
+                    <h4 style='margin: 0; color: {cat[3]};'>{cat[1]}</h4>
+                    <p style='margin: 5px 0; color: #666; font-size: 0.9em;'>{cat[2]}</p>
+                    <p style='margin: 0; font-weight: bold;'>{post_count} posts</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("Browse", key=f"cat_{cat[0]}", use_container_width=True):
                 st.session_state.page = 'category'
                 st.session_state.category_id = cat[0]
                 st.rerun()
     
-    # Recent posts
+    # Recent posts with improved formatting
     st.subheader("📝 Recent Posts")
     cursor.execute('''
         SELECT p.*, u.username, c.name as category_name, c.color as category_color,
@@ -280,28 +350,38 @@ def show_home():
     else:
         for post in posts:
             with st.container():
+                # Post header with better styling
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    if post[8]:  # is_pinned
-                        st.write(f"**📌 {post[3]}**")
-                    else:
-                        st.write(f"**{post[3]}**")
+                    # Pinned indicator
+                    pin_indicator = "📌 " if post[8] else ""
+                    st.write(f"### {pin_indicator}{post[3]}")
                     
-                    st.write(f"👤 **{post[9]}** | 📂 **{post[10]}** | 👁️ **{post[7]}** | 💬 **{post[12]}**")
-                    st.write(f"🕒 {post[5]}")
-                    # Display content with proper line breaks
-                    content_display = post[4].replace('\n', '  \n')
-                    st.write(content_display[:200] + "...")
+                    # Metadata
+                    st.write(f"""
+                    **👤 {post[9]}** | **📂 {post[10]}** | **👁️ {post[7]}** | **💬 {post[12]}** | **🕒 {post[5][:16]}**
+                    """)
+                    
+                    # Content preview with proper formatting
+                    content_preview = format_content(post[4][:300])
+                    if len(post[4]) > 300:
+                        content_preview += "..."
+                    st.write(content_preview)
+                    
+                    # Show image thumbnail if exists
+                    if post[9]:  # image_path
+                        if os.path.exists(post[9]):
+                            st.write("🖼️ *Image attached*")
                 
                 with col2:
-                    if st.button("Read More", key=f"read_{post[0]}"):
+                    if st.button("📖 Read More", key=f"read_{post[0]}", use_container_width=True):
                         st.session_state.page = 'view_post'
                         st.session_state.current_post = post[0]
                         st.rerun()
                     
                     # Edit button for post owners and admins
                     if st.session_state.user and (st.session_state.user['id'] == post[1] or st.session_state.user['role'] == 'admin'):
-                        if st.button("Edit", key=f"edit_{post[0]}"):
+                        if st.button("✏️ Edit", key=f"edit_{post[0]}", use_container_width=True):
                             st.session_state.page = 'edit_post'
                             st.session_state.current_post = post[0]
                             st.rerun()
@@ -310,7 +390,7 @@ def show_home():
     
     # Create post button
     if st.session_state.user:
-        if st.button("✏️ Create New Post", use_container_width=True):
+        if st.button("✏️ Create New Post", use_container_width=True, type="primary"):
             st.session_state.page = 'create_post'
             st.rerun()
 
@@ -320,7 +400,7 @@ def show_login():
     with st.form("login_form"):
         username = st.text_input("Username or Email")
         password = st.text_input("Password", type="password")
-        submit = st.form_submit_button("Login")
+        submit = st.form_submit_button("Login", type="primary")
         
         if submit:
             if username and password:
@@ -346,7 +426,7 @@ def show_register():
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
         confirm_password = st.text_input("Confirm Password", type="password")
-        submit = st.form_submit_button("Register")
+        submit = st.form_submit_button("Register", type="primary")
         
         if submit:
             if not all([username, email, password, confirm_password]):
@@ -375,20 +455,30 @@ def show_create_post():
     category_names = [cat[1] for cat in categories]
     category_ids = [cat[0] for cat in categories]
     
-    with st.form("create_post_form"):
+    with st.form("create_post_form", clear_on_submit=True):
         title = st.text_input("Post Title", placeholder="Enter a descriptive title for your post")
         category = st.selectbox("Category", category_names)
-        content = st.text_area("Content", height=200, placeholder="Write your post content here...\nYou can use line breaks for better formatting.")
-        submit = st.form_submit_button("Create Post")
+        
+        # Content with formatting tips
+        st.write("**Content** - Use line breaks for better formatting. For code use backticks: `code`")
+        content = st.text_area("Post Content", height=300, 
+                             placeholder="Write your post content here...\n\nFor example:\n\nStep 1: Open Chrome and type\nchrome://net-internals/#dns\ninto the address bar.\n\nStep 2: Press Enter.\n\nStep 3: Click the Clear host cache button.")
+        
+        # Image upload
+        uploaded_image = st.file_uploader("Attach Image (optional)", type=['png', 'jpg', 'jpeg', 'gif'])
+        
+        submit = st.form_submit_button("Create Post", type="primary")
         
         if submit:
             if title and content:
                 category_id = category_ids[category_names.index(category)]
+                image_path = save_uploaded_image(uploaded_image, 'posts')
+                
                 conn = sqlite3.connect('forum.db', check_same_thread=False)
                 cursor = conn.cursor()
                 cursor.execute(
-                    'INSERT INTO posts (user_id, category_id, title, content) VALUES (?, ?, ?, ?)',
-                    (st.session_state.user['id'], category_id, title, content)
+                    'INSERT INTO posts (user_id, category_id, title, content, image_path) VALUES (?, ?, ?, ?, ?)',
+                    (st.session_state.user['id'], category_id, title, content, image_path)
                 )
                 conn.commit()
                 conn.close()
@@ -445,17 +535,49 @@ def show_edit_post():
     with st.form("edit_post_form"):
         title = st.text_input("Post Title", value=post[3])
         category = st.selectbox("Category", category_names, index=category_names.index(current_category_name) if current_category_name else 0)
-        content = st.text_area("Content", value=post[4], height=200)
-        submit = st.form_submit_button("Update Post")
+        
+        st.write("**Content** - Use line breaks for better formatting")
+        content = st.text_area("Content", value=post[4], height=300)
+        
+        # Current image
+        if post[9]:  # image_path
+            st.write("**Current Image:**")
+            display_image(post[9], width=300)
+            
+            # Option to remove image
+            remove_image = st.checkbox("Remove current image")
+        else:
+            remove_image = False
+        
+        # New image upload
+        uploaded_image = st.file_uploader("Upload New Image (optional)", type=['png', 'jpg', 'jpeg', 'gif'])
+        
+        submit = st.form_submit_button("Update Post", type="primary")
         
         if submit:
             if title and content:
                 category_id = category_ids[category_names.index(category)]
+                
+                # Handle image
+                if remove_image and post[9]:
+                    # Remove old image
+                    if os.path.exists(post[9]):
+                        os.remove(post[9])
+                    image_path = None
+                elif uploaded_image:
+                    # Upload new image
+                    if post[9] and os.path.exists(post[9]):
+                        os.remove(post[9])  # Remove old image
+                    image_path = save_uploaded_image(uploaded_image, 'posts')
+                else:
+                    # Keep existing image
+                    image_path = post[9]
+                
                 conn = sqlite3.connect('forum.db', check_same_thread=False)
                 cursor = conn.cursor()
                 cursor.execute(
-                    'UPDATE posts SET title = ?, content = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                    (title, content, category_id, st.session_state.current_post)
+                    'UPDATE posts SET title = ?, content = ?, category_id = ?, image_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    (title, content, category_id, image_path, st.session_state.current_post)
                 )
                 conn.commit()
                 conn.close()
@@ -505,25 +627,35 @@ def show_view_post():
         st.rerun()
         return
     
-    # Display post
+    # Display post with better formatting
     if post[8]:  # is_pinned
         st.title(f"📌 {post[3]}")
     else:
         st.title(post[3])
     
-    st.write(f"**👤 By:** {post[9]} | **📂 Category:** {post[10]} | **👁️ Views:** {post[7]} | **🕒 Posted:** {post[5]}")
+    # Post metadata
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.write(f"**👤 By:** {post[9]} | **📂 Category:** {post[10]} | **👁️ Views:** {post[7]} | **🕒 Posted:** {post[5]}")
+    with col2:
+        if st.button("← Back to Home"):
+            st.session_state.page = 'home'
+            st.rerun()
     
     # Edit and Delete buttons for post owners and admins
     if st.session_state.user and (st.session_state.user['id'] == post[1] or st.session_state.user['role'] == 'admin'):
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("✏️ Edit Post"):
+            if st.button("✏️ Edit Post", use_container_width=True):
                 st.session_state.page = 'edit_post'
                 st.rerun()
         with col2:
-            if st.button("🗑️ Delete Post"):
+            if st.button("🗑️ Delete Post", use_container_width=True):
                 cursor.execute('DELETE FROM posts WHERE id = ?', (st.session_state.current_post,))
                 cursor.execute('DELETE FROM comments WHERE post_id = ?', (st.session_state.current_post,))
+                # Remove post image if exists
+                if post[9] and os.path.exists(post[9]):
+                    os.remove(post[9])
                 conn.commit()
                 st.success("Post deleted successfully!")
                 st.session_state.page = 'home'
@@ -532,9 +664,13 @@ def show_view_post():
     
     st.divider()
     
-    # Display content with proper line breaks
-    content_display = post[4].replace('\n', '  \n')
-    st.write(content_display)
+    # Display content with proper formatting
+    if post[9]:  # Display image if exists
+        display_image(post[9])
+        st.divider()
+    
+    formatted_content = format_content(post[4])
+    st.write(formatted_content)
     
     st.divider()
     
@@ -559,13 +695,23 @@ def show_view_post():
                 col1, col2 = st.columns([4, 1])
                 with col1:
                     st.write(f"**{comment[6]}** - {comment[4]}")
-                    comment_content = comment[3].replace('\n', '  \n')
+                    
+                    # Display comment content with formatting
+                    comment_content = format_content(comment[3])
                     st.write(comment_content)
+                    
+                    # Display comment image if exists
+                    if comment[6]:  # image_path in comments
+                        display_image(comment[6], width=200)
+                
                 with col2:
                     # Delete comment button for comment owners and admins
                     if st.session_state.user and (st.session_state.user['id'] == comment[2] or st.session_state.user['role'] == 'admin'):
-                        if st.button("Delete", key=f"del_comment_{comment[0]}"):
+                        if st.button("🗑️ Delete", key=f"del_comment_{comment[0]}"):
                             cursor.execute('DELETE FROM comments WHERE id = ?', (comment[0],))
+                            # Remove comment image if exists
+                            if comment[6] and os.path.exists(comment[6]):
+                                os.remove(comment[6])
                             conn.commit()
                             st.success("Comment deleted!")
                             st.rerun()
@@ -573,15 +719,22 @@ def show_view_post():
     
     # Add comment form
     if st.session_state.user:
-        with st.form("add_comment_form"):
-            comment_content = st.text_area("Add a comment", placeholder="Share your thoughts...")
+        with st.form("add_comment_form", clear_on_submit=True):
+            comment_content = st.text_area("Add a comment", placeholder="Share your thoughts...", height=100)
+            
+            # Comment image upload
+            comment_image = st.file_uploader("Attach Image to Comment (optional)", 
+                                           type=['png', 'jpg', 'jpeg', 'gif'],
+                                           key="comment_image")
+            
             submit = st.form_submit_button("💬 Post Comment")
             
             if submit:
                 if comment_content:
+                    image_path = save_uploaded_image(comment_image, 'comments')
                     cursor.execute(
-                        'INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)',
-                        (st.session_state.current_post, st.session_state.user['id'], comment_content)
+                        'INSERT INTO comments (post_id, user_id, content, image_path) VALUES (?, ?, ?, ?)',
+                        (st.session_state.current_post, st.session_state.user['id'], comment_content, image_path)
                     )
                     conn.commit()
                     st.success("Comment added successfully!")
@@ -592,10 +745,6 @@ def show_view_post():
         st.info("Please login to post a comment.")
     
     conn.close()
-    
-    if st.button("← Back to Home"):
-        st.session_state.page = 'home'
-        st.rerun()
 
 def show_profile():
     if not st.session_state.user:
@@ -610,10 +759,13 @@ def show_profile():
     conn = sqlite3.connect('forum.db', check_same_thread=False)
     cursor = conn.cursor()
     
-    # User info
+    # User info with avatar
     col1, col2 = st.columns([1, 3])
     with col1:
-        st.header("👤")
+        if user[7]:  # avatar path
+            display_image(user[7], width=150)
+        else:
+            st.header("👤")
     with col2:
         st.write(f"### {user[1]}")
         st.write(f"**Email:** {user[2]}")
@@ -621,6 +773,21 @@ def show_profile():
         st.write(f"**Member since:** {user[5][:10]}")
         if user[6]:
             st.write(f"**Bio:** {user[6]}")
+    
+    # Avatar upload
+    with st.expander("Update Avatar"):
+        avatar_file = st.file_uploader("Upload Avatar", type=['png', 'jpg', 'jpeg'])
+        if st.button("Update Avatar"):
+            if avatar_file:
+                # Remove old avatar if exists
+                if user[7] and os.path.exists(user[7]):
+                    os.remove(user[7])
+                
+                avatar_path = save_uploaded_image(avatar_file, 'avatars')
+                cursor.execute('UPDATE users SET avatar = ? WHERE id = ?', (avatar_path, user[0]))
+                conn.commit()
+                st.success("Avatar updated successfully!")
+                st.rerun()
     
     st.divider()
     
@@ -657,7 +824,9 @@ def show_profile():
         for post in posts:
             with st.container():
                 st.write(f"**{post[3]}** (in {post[9]})")
-                content_preview = post[4].replace('\n', ' ')[:100] + "..."
+                content_preview = format_content(post[4][:100])
+                if len(post[4]) > 100:
+                    content_preview += "..."
                 st.write(content_preview)
                 if st.button("View", key=f"view_my_post_{post[0]}"):
                     st.session_state.page = 'view_post'
@@ -715,7 +884,7 @@ def show_admin():
     recent_posts = cursor.fetchall()
     
     for post in recent_posts:
-        st.write(f"📝 **{post[1]}** posted: *{post[0]}*")
+        st.write(f"📝 **{post[1]}** posted: *{post[0]}* - {post[2][:16]}")
     
     st.divider()
     
@@ -729,7 +898,7 @@ def show_admin():
         with col1:
             st.write(f"**{user[1]}**")
         with col2:
-            # Hide email for privacy - show only first 3 characters
+            # Hide email for privacy
             email_display = user[2][:3] + "***" + user[2].split('@')[1] if '@' in user[2] else "***"
             st.write(email_display)
         with col3:
@@ -760,7 +929,7 @@ def show_category():
     
     conn = sqlite3.connect('forum.db', check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('SELECT name FROM categories WHERE id = ?', (st.session_state.category_id,))
+    cursor.execute('SELECT name, description FROM categories WHERE id = ?', (st.session_state.category_id,))
     category = cursor.fetchone()
     
     if not category:
@@ -769,7 +938,9 @@ def show_category():
         st.rerun()
         return
     
-    st.title(f"📂 {category[0]} Posts")
+    st.title(f"📂 {category[0]}")
+    if category[1]:
+        st.write(f"*{category[1]}*")
     
     posts = get_category_posts(st.session_state.category_id)
     
@@ -780,12 +951,19 @@ def show_category():
             with st.container():
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    st.write(f"**{post[3]}**")
-                    st.write(f"👤 **{post[9]}** | 👁️ **{post[7]}** | 🕒 **{post[5]}**")
-                    content_preview = post[4].replace('\n', ' ')[:200] + "..."
+                    pin_indicator = "📌 " if post[8] else ""
+                    st.write(f"**{pin_indicator}{post[3]}**")
+                    st.write(f"👤 **{post[9]}** | 👁️ **{post[7]}** | 🕒 **{post[5][:16]}**")
+                    
+                    content_preview = format_content(post[4][:200])
+                    if len(post[4]) > 200:
+                        content_preview += "..."
                     st.write(content_preview)
+                    
+                    if post[9]:  # image_path
+                        st.write("🖼️ *Image attached*")
                 with col2:
-                    if st.button("Read More", key=f"cat_read_{post[0]}"):
+                    if st.button("Read More", key=f"cat_read_{post[0]}", use_container_width=True):
                         st.session_state.page = 'view_post'
                         st.session_state.current_post = post[0]
                         st.rerun()
@@ -810,18 +988,36 @@ def show_search():
     if not results:
         st.info("No results found. Try different keywords.")
     else:
-        st.write(f"Found {len(results)} results:")
+        st.write(f"**Found {len(results)} results:**")
         
         for post in results:
             with st.container():
                 col1, col2 = st.columns([4, 1])
                 with col1:
                     st.write(f"**{post[3]}**")
-                    st.write(f"👤 **{post[9]}** | 📂 **{post[10]}** | 👁️ **{post[7]}** | 🕒 **{post[5]}**")
-                    content_preview = post[4].replace('\n', ' ')[:200] + "..."
-                    st.write(content_preview)
+                    st.write(f"👤 **{post[9]}** | 📂 **{post[10]}** | 👁️ **{post[7]}** | 🕒 **{post[5][:16]}**")
+                    
+                    # Highlight search terms in content
+                    content = post[4]
+                    query_lower = st.session_state.search_query.lower()
+                    content_lower = content.lower()
+                    
+                    # Simple highlighting (you can make this more sophisticated)
+                    if query_lower in content_lower:
+                        start_idx = content_lower.find(query_lower)
+                        preview_start = max(0, start_idx - 50)
+                        preview_end = min(len(content), start_idx + len(query_lower) + 50)
+                        preview = content[preview_start:preview_end]
+                        if preview_start > 0:
+                            preview = "..." + preview
+                        if preview_end < len(content):
+                            preview = preview + "..."
+                    else:
+                        preview = content[:200] + "..." if len(content) > 200 else content
+                    
+                    st.write(format_content(preview))
                 with col2:
-                    if st.button("Read More", key=f"search_read_{post[0]}"):
+                    if st.button("Read More", key=f"search_read_{post[0]}", use_container_width=True):
                         st.session_state.page = 'view_post'
                         st.session_state.current_post = post[0]
                         st.rerun()
@@ -872,8 +1068,19 @@ with st.sidebar:
         st.rerun()
     
     if st.session_state.user:
-        if st.button("✏️ Create Post", use_container_width=True):
+        if st.button("✏️ Create Post", use_container_width=True, type="primary"):
             st.session_state.page = 'create_post'
+            st.rerun()
+    
+    st.divider()
+    
+    # Categories quick access
+    st.subheader("Quick Categories")
+    categories = get_categories()
+    for cat in categories:
+        if st.button(f"📁 {cat[1]}", key=f"sidebar_cat_{cat[0]}", use_container_width=True):
+            st.session_state.page = 'category'
+            st.session_state.category_id = cat[0]
             st.rerun()
     
     st.divider()
