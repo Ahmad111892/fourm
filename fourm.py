@@ -197,70 +197,6 @@ def format_content(content):
     formatted = content.replace('\n', '  \n')
     return formatted
 
-# Rich Text Editor Component - UPDATED: Form se bahar
-def rich_text_editor(key="editor", default_content=""):
-    """A rich text editor using Streamlit components"""
-    
-    st.markdown("**Post Editor** - Use the formatting options below:")
-    
-    # Formatting buttons - Form ke bahar hain
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        if st.button("**Bold**", key=f"bold_{key}", use_container_width=True):
-            current_content = st.session_state.get(f'editor_{key}', default_content)
-            st.session_state[f'editor_{key}'] = current_content + " **bold text** "
-            st.rerun()
-    
-    with col2:
-        if st.button("*Italic*", key=f"italic_{key}", use_container_width=True):
-            current_content = st.session_state.get(f'editor_{key}', default_content)
-            st.session_state[f'editor_{key}'] = current_content + " *italic text* "
-            st.rerun()
-    
-    with col3:
-        if st.button("`Code`", key=f"code_{key}", use_container_width=True):
-            current_content = st.session_state.get(f'editor_{key}', default_content)
-            st.session_state[f'editor_{key}'] = current_content + " `code` "
-            st.rerun()
-    
-    with col4:
-        if st.button("📋 List", key=f"list_{key}", use_container_width=True):
-            current_content = st.session_state.get(f'editor_{key}', default_content)
-            st.session_state[f'editor_{key}'] = current_content + "\n- List item 1\n- List item 2\n- List item 3\n"
-            st.rerun()
-    
-    with col5:
-        if st.button("1. Number", key=f"number_{key}", use_container_width=True):
-            current_content = st.session_state.get(f'editor_{key}', default_content)
-            st.session_state[f'editor_{key}'] = current_content + "\n1. First item\n2. Second item\n3. Third item\n"
-            st.rerun()
-    
-    with col6:
-        if st.button("🔗 Link", key=f"link_{key}", use_container_width=True):
-            current_content = st.session_state.get(f'editor_{key}', default_content)
-            st.session_state[f'editor_{key}'] = current_content + " [link text](http://url.com) "
-            st.rerun()
-    
-    # Editor area
-    content = st.text_area(
-        "Write your content:",
-        value=st.session_state.get(f'editor_{key}', default_content),
-        height=400,
-        key=f"textarea_{key}",
-        placeholder="Write your post here...\n\nYou can use:\n**Bold** text\n*Italic* text\n`Code` blocks\n- Bullet points\n1. Numbered lists\n\nAdd images below!",
-        help="Use the formatting buttons above or type Markdown directly"
-    )
-    
-    # Preview section
-    if content:
-        with st.expander("📖 Live Preview"):
-            st.markdown("**Preview:**")
-            formatted_content = format_content(content)
-            st.markdown(formatted_content)
-    
-    return content
-
 def display_rich_content(content, image_path=None):
     """Display content with rich formatting and images"""
     if image_path and os.path.exists(image_path):
@@ -456,12 +392,13 @@ def show_home():
                     st.write(content_preview)
                 
                 with col2:
-                    if st.button("📖 Read More", key=f"read_{post[0]}", use_container_width=True):
+                    # Action buttons like Google Colab
+                    if st.button("📖 Read", key=f"read_{post[0]}", use_container_width=True):
                         st.session_state.page = 'view_post'
                         st.session_state.current_post = post[0]
                         st.rerun()
                     
-                    # Edit button for post owners and admins
+                    # Edit button for post owners and admins - Always visible like Google Colab
                     if st.session_state.user and (st.session_state.user['id'] == post[1] or st.session_state.user['role'] == 'admin'):
                         if st.button("✏️ Edit", key=f"edit_{post[0]}", use_container_width=True):
                             st.session_state.page = 'edit_post'
@@ -470,11 +407,13 @@ def show_home():
                 
                 st.divider()
     
-    # Create post button
+    # Create post button - Prominently displayed like Google Colab
     if st.session_state.user:
-        if st.button("✏️ Create New Post", use_container_width=True, type="primary"):
-            st.session_state.page = 'create_post'
-            st.rerun()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🚀 Create New Post", use_container_width=True, type="primary"):
+                st.session_state.page = 'create_post'
+                st.rerun()
 
 def show_login():
     st.title("🔐 Login")
@@ -531,30 +470,159 @@ def show_register():
         st.rerun()
 
 def show_create_post():
-    st.title("✏️ Create New Post")
+    st.title("✏️ Create New Topic")
     
     categories = get_categories()
     category_names = [cat[1] for cat in categories]
     category_ids = [cat[0] for cat in categories]
     
-    # Rich Text Editor - Form se pehle
-    content = rich_text_editor("create", st.session_state.editor_create)
+    # Modern editor interface with Google Colab-like styling
+    st.markdown("""
+        <style>
+        .editor-container {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .toolbar-btn {
+            background-color: #f1f3f4;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin: 2px;
+            cursor: pointer;
+        }
+        .toolbar-btn:hover {
+            background-color: #e8f0fe;
+            border-color: #1a73e8;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Title input at the top - Google Colab style
+    st.markdown("**📝 Topic Title**")
+    title = st.text_input("Topic Title", placeholder="What's your topic about?", label_visibility="collapsed")
+    
+    # Category selection
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("**📂 Category**")
+        category = st.selectbox("Select Category", category_names, label_visibility="collapsed")
+    with col2:
+        st.write("")  # Spacer
+    
+    st.divider()
+    
+    # Modern toolbar - Google Colab inspired
+    st.markdown("**Formatting Tools:**")
+    col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns(9)
+    
+    with col1:
+        if st.button("**B**", key="bold_create", help="Bold", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + " **bold text** "
+            st.rerun()
+    
+    with col2:
+        if st.button("*I*", key="italic_create", help="Italic", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + " *italic text* "
+            st.rerun()
+    
+    with col3:
+        if st.button("U̲", key="underline_create", help="Underline", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + " <u>underline</u> "
+            st.rerun()
+    
+    with col4:
+        if st.button("`C`", key="code_create", help="Inline Code", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + " `code` "
+            st.rerun()
+    
+    with col5:
+        if st.button("```", key="block_create", help="Code Block", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + "\n```python\n# Your code here\nprint('Hello World')\n```\n"
+            st.rerun()
+    
+    with col6:
+        if st.button("• ≡", key="list_create", help="Bullet List", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + "\n- Item 1\n- Item 2\n- Item 3\n"
+            st.rerun()
+    
+    with col7:
+        if st.button("1 2 3", key="number_create", help="Numbered List", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + "\n1. First item\n2. Second item\n3. Third item\n"
+            st.rerun()
+    
+    with col8:
+        if st.button("🔗", key="link_create", help="Insert Link", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + " [link text](https://example.com) "
+            st.rerun()
+    
+    with col9:
+        if st.button(">", key="quote_create", help="Blockquote", use_container_width=True):
+            current = st.session_state.get('editor_create', '')
+            st.session_state['editor_create'] = current + "\n> Quote text here\n"
+            st.rerun()
+    
+    # Editor area with modern styling
+    st.markdown("**Content:**")
+    content = st.text_area(
+        "Write your content",
+        value=st.session_state.get('editor_create', ''),
+        height=400,
+        key="textarea_create",
+        placeholder="""Type your content here...
+
+You can use:
+- **Bold** text
+- *Italic* text  
+- `Code` blocks
+- Lists and numbered items
+- Links and quotes
+
+Or use the formatting buttons above!""",
+        label_visibility="collapsed"
+    )
     
     # Image upload section
-    st.subheader("🖼️ Add Featured Image")
-    uploaded_image = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg', 'gif'], key="create_image")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        uploaded_image = st.file_uploader("🖼️ Attach Featured Image", type=['png', 'jpg', 'jpeg', 'gif'], key="create_image")
     
     if uploaded_image:
-        st.image(uploaded_image, caption="Preview", width=300)
+        st.image(uploaded_image, caption="Image Preview", width=300)
     
-    # Form for basic post details
-    with st.form("create_post_form", clear_on_submit=False):
-        title = st.text_input("Post Title", placeholder="Enter a descriptive title for your post")
-        category = st.selectbox("Category", category_names)
-        
-        submit = st.form_submit_button("Create Post", type="primary")
-        
-        if submit:
+    # Live preview section
+    with st.expander("👁️ Live Preview", expanded=False):
+        if content or uploaded_image:
+            if uploaded_image:
+                st.image(uploaded_image, caption="Featured Image", width=400)
+                st.write("---")
+            
+            if content:
+                formatted_content = format_content(content)
+                st.markdown("**Preview:**")
+                st.markdown(formatted_content)
+        else:
+            st.info("Start typing to see preview...")
+    
+    st.divider()
+    
+    # Action buttons - Google Colab style prominent buttons
+    st.markdown("### Actions")
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    
+    with col1:
+        if st.button("🚀 **Publish Topic**", type="primary", use_container_width=True):
             if title and content:
                 category_id = category_ids[category_names.index(category)]
                 image_path = save_uploaded_image(uploaded_image, 'posts')
@@ -571,16 +639,29 @@ def show_create_post():
                 # Clear editor state
                 st.session_state.editor_create = ""
                 
-                st.success("Post created successfully!")
+                st.success("🎉 Topic published successfully!")
                 st.session_state.page = 'home'
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Please fill in both title and content!")
+                st.error("❌ Please fill in both title and content!")
     
-    if st.button("← Back to Home"):
-        st.session_state.page = 'home'
-        st.rerun()
+    with col2:
+        if st.button("💾 Save Draft", use_container_width=True):
+            if title or content:
+                st.success("📋 Draft saved successfully!")
+            else:
+                st.info("💡 Add some content to save as draft")
+    
+    with col3:
+        if st.button("👁️ Toggle Preview", use_container_width=True):
+            st.info("🔁 Use the preview expander above")
+    
+    with col4:
+        if st.button("❌ Cancel", use_container_width=True):
+            st.session_state.editor_create = ""
+            st.session_state.page = 'home'
+            st.rerun()
 
 def show_edit_post():
     if not st.session_state.current_post:
@@ -608,7 +689,7 @@ def show_edit_post():
         st.rerun()
         return
     
-    st.title("✏️ Edit Post")
+    st.title("✏️ Edit Topic")
     
     categories = get_categories()
     category_names = [cat[1] for cat in categories]
@@ -622,37 +703,161 @@ def show_edit_post():
             break
     
     # Initialize editor content if not already set
-    if f'editor_edit' not in st.session_state or st.session_state.editor_edit == "":
+    if 'editor_edit' not in st.session_state or st.session_state.editor_edit == "":
         st.session_state.editor_edit = post[4]
     
-    # Rich Text Editor - Form se pehle
-    content = rich_text_editor("edit", st.session_state.editor_edit)
+    # Modern editor interface
+    st.markdown("""
+        <style>
+        .editor-container {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     
-    # Current image
+    # Title input at the top
+    st.markdown("**📝 Topic Title**")
+    title = st.text_input("Topic Title", value=post[3], label_visibility="collapsed")
+    
+    # Category selection
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("**📂 Category**")
+        category = st.selectbox("Select Category", category_names, 
+                               index=category_names.index(current_category_name) if current_category_name else 0,
+                               label_visibility="collapsed")
+    with col2:
+        st.write("")  # Spacer
+    
+    st.divider()
+    
+    # Modern toolbar
+    st.markdown("**Formatting Tools:**")
+    col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns(9)
+    
+    with col1:
+        if st.button("**B**", key="bold_edit", help="Bold", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + " **bold text** "
+            st.rerun()
+    
+    with col2:
+        if st.button("*I*", key="italic_edit", help="Italic", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + " *italic text* "
+            st.rerun()
+    
+    with col3:
+        if st.button("U̲", key="underline_edit", help="Underline", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + " <u>underline</u> "
+            st.rerun()
+    
+    with col4:
+        if st.button("`C`", key="code_edit", help="Inline Code", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + " `code` "
+            st.rerun()
+    
+    with col5:
+        if st.button("```", key="block_edit", help="Code Block", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + "\n```python\n# Your code here\nprint('Hello World')\n```\n"
+            st.rerun()
+    
+    with col6:
+        if st.button("• ≡", key="list_edit", help="Bullet List", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + "\n- Item 1\n- Item 2\n- Item 3\n"
+            st.rerun()
+    
+    with col7:
+        if st.button("1 2 3", key="number_edit", help="Numbered List", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + "\n1. First item\n2. Second item\n3. Third item\n"
+            st.rerun()
+    
+    with col8:
+        if st.button("🔗", key="link_edit", help="Insert Link", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + " [link text](https://example.com) "
+            st.rerun()
+    
+    with col9:
+        if st.button(">", key="quote_edit", help="Blockquote", use_container_width=True):
+            current = st.session_state.get('editor_edit', '')
+            st.session_state['editor_edit'] = current + "\n> Quote text here\n"
+            st.rerun()
+    
+    # Editor area
+    st.markdown("**Content:**")
+    content = st.text_area(
+        "Write your content",
+        value=st.session_state.get('editor_edit', ''),
+        height=400,
+        key="textarea_edit",
+        placeholder="Edit your content here...",
+        label_visibility="collapsed"
+    )
+    
+    # Current image display and management
     if post[9]:  # image_path
-        st.subheader("Current Featured Image")
+        st.markdown("**🖼️ Current Featured Image**")
         display_image(post[9], width=300)
         
-        # Option to remove image
-        remove_image = st.checkbox("Remove current image")
+        col1, col2 = st.columns(2)
+        with col1:
+            remove_image = st.checkbox("Remove current image")
+        with col2:
+            if st.button("🗑️ Delete Image", use_container_width=True):
+                if os.path.exists(post[9]):
+                    os.remove(post[9])
+                conn = sqlite3.connect('forum.db', check_same_thread=False)
+                cursor = conn.cursor()
+                cursor.execute('UPDATE posts SET image_path = NULL WHERE id = ?', (st.session_state.current_post,))
+                conn.commit()
+                conn.close()
+                st.success("Image removed successfully!")
+                st.rerun()
     else:
         remove_image = False
     
     # New image upload
-    st.subheader("Update Featured Image")
-    uploaded_image = st.file_uploader("Upload New Image", type=['png', 'jpg', 'jpeg', 'gif'], key="edit_image")
+    st.markdown("**📎 Upload New Image**")
+    uploaded_image = st.file_uploader("Choose new image", type=['png', 'jpg', 'jpeg', 'gif'], key="edit_image")
     
     if uploaded_image:
         st.image(uploaded_image, caption="New Image Preview", width=300)
     
-    # Form for basic post details
-    with st.form("edit_post_form"):
-        title = st.text_input("Post Title", value=post[3])
-        category = st.selectbox("Category", category_names, index=category_names.index(current_category_name) if current_category_name else 0)
-        
-        submit = st.form_submit_button("Update Post", type="primary")
-        
-        if submit:
+    # Live preview
+    with st.expander("👁️ Live Preview", expanded=False):
+        if content:
+            preview_image = uploaded_image if uploaded_image else (post[9] if not remove_image else None)
+            if preview_image:
+                if uploaded_image:
+                    st.image(uploaded_image, caption="Featured Image", width=400)
+                else:
+                    display_image(post[9], width=400)
+                st.write("---")
+            
+            formatted_content = format_content(content)
+            st.markdown("**Preview:**")
+            st.markdown(formatted_content)
+        else:
+            st.info("Start editing to see preview...")
+    
+    st.divider()
+    
+    # Action buttons - Google Colab style
+    st.markdown("### Actions")
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    
+    with col1:
+        if st.button("💾 **Save Changes**", type="primary", use_container_width=True):
             if title and content:
                 category_id = category_ids[category_names.index(category)]
                 
@@ -683,25 +888,26 @@ def show_edit_post():
                 # Clear editor state
                 st.session_state.editor_edit = ""
                 
-                st.success("Post updated successfully!")
+                st.success("✅ Changes saved successfully!")
                 st.session_state.page = 'view_post'
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Please fill in all fields!")
+                st.error("❌ Please fill in all required fields!")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("← Back to Post"):
-            # Clear editor state
-            st.session_state.editor_edit = ""
+    with col2:
+        if st.button("📋 View Post", use_container_width=True):
             st.session_state.page = 'view_post'
             st.rerun()
-    with col2:
-        if st.button("← Back to Home"):
-            # Clear editor state
+    
+    with col3:
+        if st.button("👁️ Toggle Preview", use_container_width=True):
+            st.info("🔁 Use the preview expander above")
+    
+    with col4:
+        if st.button("❌ Cancel", use_container_width=True):
             st.session_state.editor_edit = ""
-            st.session_state.page = 'home'
+            st.session_state.page = 'view_post'
             st.rerun()
 
 def show_view_post():
@@ -739,34 +945,28 @@ def show_view_post():
     else:
         st.title(post[3])
     
-    # Post metadata
-    col1, col2 = st.columns([3, 1])
+    # Action buttons at top like Google Colab
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     with col1:
-        st.write(f"**👤 By:** {post[9]} | **📂 Category:** {post[10]} | **👁️ Views:** {post[7]} | **🕒 Posted:** {post[5]}")
-    with col2:
-        if st.button("← Back to Home"):
+        if st.button("← Back to Home", use_container_width=True):
             st.session_state.page = 'home'
             st.rerun()
-    
-    # Edit and Delete buttons for post owners and admins
-    if st.session_state.user and (st.session_state.user['id'] == post[1] or st.session_state.user['role'] == 'admin'):
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✏️ Edit Post", use_container_width=True):
+    with col2:
+        if st.button("📋 Copy Link", use_container_width=True):
+            # In a real app, this would copy the post URL
+            st.info("Link copy feature coming soon!")
+    with col3:
+        if st.button("🔗 Share", use_container_width=True):
+            st.info("Share feature coming soon!")
+    with col4:
+        # Edit button always visible for authorized users like Google Colab
+        if st.session_state.user and (st.session_state.user['id'] == post[1] or st.session_state.user['role'] == 'admin'):
+            if st.button("✏️ Edit Post", use_container_width=True, type="secondary"):
                 st.session_state.page = 'edit_post'
                 st.rerun()
-        with col2:
-            if st.button("🗑️ Delete Post", use_container_width=True):
-                cursor.execute('DELETE FROM posts WHERE id = ?', (st.session_state.current_post,))
-                cursor.execute('DELETE FROM comments WHERE post_id = ?', (st.session_state.current_post,))
-                # Remove post image if exists
-                if post[9] and os.path.exists(post[9]):
-                    os.remove(post[9])
-                conn.commit()
-                st.success("Post deleted successfully!")
-                st.session_state.page = 'home'
-                time.sleep(1)
-                st.rerun()
+    
+    # Post metadata
+    st.write(f"**👤 By:** {post[9]} | **📂 Category:** {post[10]} | **👁️ Views:** {post[7]} | **🕒 Posted:** {post[5]}")
     
     st.divider()
     
@@ -847,8 +1047,6 @@ def show_view_post():
     
     conn.close()
 
-# ... (Other functions remain the same - profile, admin, category, search)
-
 def show_profile():
     if not st.session_state.user:
         st.error("Please login to view profile!")
@@ -861,6 +1059,16 @@ def show_profile():
     user = get_user(st.session_state.user['id'])
     conn = sqlite3.connect('forum.db', check_same_thread=False)
     cursor = conn.cursor()
+    
+    # Action buttons at top
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("← Back to Home", use_container_width=True):
+            st.session_state.page = 'home'
+            st.rerun()
+    with col2:
+        if st.button("✏️ Edit Profile", use_container_width=True):
+            st.info("Profile editing feature coming soon!")
     
     # User info with avatar
     col1, col2 = st.columns([1, 3])
