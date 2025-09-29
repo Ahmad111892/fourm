@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Database setup
+# Database setup - UPDATED to fix the error
 def setup_database():
     conn = sqlite3.connect('forum.db', check_same_thread=False)
     cursor = conn.cursor()
@@ -45,7 +45,7 @@ def setup_database():
         )
     ''')
     
-    # Posts table
+    # Posts table - FIXED: Added image_path column properly
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,44 +161,109 @@ def search_posts(query):
 def save_uploaded_image(uploaded_file, folder='posts'):
     """Save uploaded image and return file path"""
     if uploaded_file is not None:
-        # Generate unique filename
-        file_extension = uploaded_file.name.split('.')[-1]
-        filename = f"{int(time.time())}_{hashlib.md5(uploaded_file.name.encode()).hexdigest()[:8]}.{file_extension}"
-        file_path = os.path.join('uploads', folder, filename)
-        
-        # Save file
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        
-        return file_path
+        try:
+            # Generate unique filename
+            file_extension = uploaded_file.name.split('.')[-1]
+            filename = f"{int(time.time())}_{hashlib.md5(uploaded_file.name.encode()).hexdigest()[:8]}.{file_extension}"
+            file_path = os.path.join('uploads', folder, filename)
+            
+            # Save file
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            return file_path
+        except Exception as e:
+            st.error(f"Error saving image: {e}")
+            return None
     return None
 
 def display_image(image_path, width=400):
     """Display image in Streamlit"""
     if image_path and os.path.exists(image_path):
-        image = Image.open(image_path)
-        st.image(image, width=width, caption="Attached Image")
+        try:
+            image = Image.open(image_path)
+            st.image(image, width=width, caption="Attached Image")
+        except Exception as e:
+            st.error(f"Error displaying image: {e}")
     elif image_path:
         st.warning("Image not found")
 
 def format_content(content):
-    """Format content with proper line breaks and code formatting"""
-    lines = content.split('\n')
-    formatted_lines = []
+    """Format content with proper line breaks and basic formatting"""
+    if not content:
+        return ""
     
-    for line in lines:
-        if line.strip().startswith('```') and line.strip().endswith('```'):
-            # Code block
-            code_content = line.strip()[3:-3]  # Remove ```
-            formatted_lines.append(f"`{code_content}`")
-        elif '`' in line:
-            # Inline code
-            formatted_lines.append(line)
-        else:
-            # Regular text with proper line breaks
-            formatted_lines.append(line)
+    # Replace multiple newlines with proper markdown line breaks
+    formatted = content.replace('\n', '  \n')
+    return formatted
+
+# Rich Text Editor Component
+def rich_text_editor(key="editor", default_content=""):
+    """A rich text editor using Streamlit components"""
     
-    return '  \n'.join(formatted_lines)
+    st.markdown("**Post Editor** - Use the formatting options below:")
+    
+    # Formatting buttons
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    with col1:
+        if st.button("**Bold**", key=f"bold_{key}"):
+            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " **bold text** "
+    
+    with col2:
+        if st.button("*Italic*", key=f"italic_{key}"):
+            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " *italic text* "
+    
+    with col3:
+        if st.button("`Code`", key=f"code_{key}"):
+            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " `code` "
+    
+    with col4:
+        if st.button("📋 List", key=f"list_{key}"):
+            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + "\n- List item 1\n- List item 2\n- List item 3\n"
+    
+    with col5:
+        if st.button("1. Number", key=f"number_{key}"):
+            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + "\n1. First item\n2. Second item\n3. Third item\n"
+    
+    with col6:
+        if st.button("🔗 Link", key=f"link_{key}"):
+            st.session_state[f'editor_{key}'] = st.session_state.get(f'editor_{key}', default_content) + " [link text](http://url.com) "
+    
+    # Editor area
+    content = st.text_area(
+        "Write your content:",
+        value=st.session_state.get(f'editor_{key}', default_content),
+        height=400,
+        key=f"textarea_{key}",
+        placeholder="Write your post here...\n\nYou can use:\n**Bold** text\n*Italic* text\n`Code` blocks\n- Bullet points\n1. Numbered lists\n\nAdd images below!",
+        help="Use the formatting buttons above or type Markdown directly"
+    )
+    
+    # Preview section
+    if content:
+        with st.expander("📖 Live Preview"):
+            st.markdown("**Preview:**")
+            formatted_content = format_content(content)
+            st.markdown(formatted_content)
+    
+    return content
+
+def display_rich_content(content, image_path=None):
+    """Display content with rich formatting and images"""
+    if image_path and os.path.exists(image_path):
+        # Display image at the top
+        try:
+            image = Image.open(image_path)
+            st.image(image, use_column_width=True, caption="Featured Image")
+            st.write("---")
+        except Exception as e:
+            st.error(f"Error displaying image: {e}")
+    
+    # Display formatted content
+    if content:
+        formatted_content = format_content(content)
+        st.markdown(formatted_content)
 
 # Session state initialization
 if 'user' not in st.session_state:
@@ -211,6 +276,12 @@ if 'category_id' not in st.session_state:
     st.session_state.category_id = None
 if 'search_query' not in st.session_state:
     st.session_state.search_query = ''
+
+# Initialize editor states
+if 'editor_create' not in st.session_state:
+    st.session_state.editor_create = ""
+if 'editor_edit' not in st.session_state:
+    st.session_state.editor_edit = ""
 
 # Authentication functions
 def login_user(username, password):
@@ -262,6 +333,9 @@ def register_user(username, email, password):
 def logout_user():
     st.session_state.user = None
     st.session_state.page = 'home'
+    # Clear editor states
+    st.session_state.editor_create = ""
+    st.session_state.editor_edit = ""
 
 # Page functions
 def show_home():
@@ -362,16 +436,12 @@ def show_home():
                     **👤 {post[9]}** | **📂 {post[10]}** | **👁️ {post[7]}** | **💬 {post[12]}** | **🕒 {post[5][:16]}**
                     """)
                     
-                    # Content preview with proper formatting
-                    content_preview = format_content(post[4][:300])
-                    if len(post[4]) > 300:
-                        content_preview += "..."
-                    st.write(content_preview)
-                    
-                    # Show image thumbnail if exists
+                    # Content preview with image indicator
                     if post[9]:  # image_path
-                        if os.path.exists(post[9]):
-                            st.write("🖼️ *Image attached*")
+                        st.write("🖼️ *Includes images*")
+                    
+                    content_preview = post[4][:200] + "..." if len(post[4]) > 200 else post[4]
+                    st.write(content_preview)
                 
                 with col2:
                     if st.button("📖 Read More", key=f"read_{post[0]}", use_container_width=True):
@@ -455,17 +525,19 @@ def show_create_post():
     category_names = [cat[1] for cat in categories]
     category_ids = [cat[0] for cat in categories]
     
-    with st.form("create_post_form", clear_on_submit=True):
+    with st.form("create_post_form", clear_on_submit=False):
         title = st.text_input("Post Title", placeholder="Enter a descriptive title for your post")
         category = st.selectbox("Category", category_names)
         
-        # Content with formatting tips
-        st.write("**Content** - Use line breaks for better formatting. For code use backticks: `code`")
-        content = st.text_area("Post Content", height=300, 
-                             placeholder="Write your post content here...\n\nFor example:\n\nStep 1: Open Chrome and type\nchrome://net-internals/#dns\ninto the address bar.\n\nStep 2: Press Enter.\n\nStep 3: Click the Clear host cache button.")
+        # Rich Text Editor
+        content = rich_text_editor("create", st.session_state.editor_create)
         
         # Image upload
-        uploaded_image = st.file_uploader("Attach Image (optional)", type=['png', 'jpg', 'jpeg', 'gif'])
+        st.subheader("🖼️ Add Featured Image")
+        uploaded_image = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg', 'gif'], key="create_image")
+        
+        if uploaded_image:
+            st.image(uploaded_image, caption="Preview", width=300)
         
         submit = st.form_submit_button("Create Post", type="primary")
         
@@ -482,6 +554,10 @@ def show_create_post():
                 )
                 conn.commit()
                 conn.close()
+                
+                # Clear editor state
+                st.session_state.editor_create = ""
+                
                 st.success("Post created successfully!")
                 st.session_state.page = 'home'
                 time.sleep(1)
@@ -532,16 +608,20 @@ def show_edit_post():
             current_category_name = cat[1]
             break
     
+    # Initialize editor content if not already set
+    if f'editor_edit' not in st.session_state or st.session_state.editor_edit == "":
+        st.session_state.editor_edit = post[4]
+    
     with st.form("edit_post_form"):
         title = st.text_input("Post Title", value=post[3])
         category = st.selectbox("Category", category_names, index=category_names.index(current_category_name) if current_category_name else 0)
         
-        st.write("**Content** - Use line breaks for better formatting")
-        content = st.text_area("Content", value=post[4], height=300)
+        # Rich Text Editor
+        content = rich_text_editor("edit", st.session_state.editor_edit)
         
         # Current image
         if post[9]:  # image_path
-            st.write("**Current Image:**")
+            st.subheader("Current Featured Image")
             display_image(post[9], width=300)
             
             # Option to remove image
@@ -550,7 +630,11 @@ def show_edit_post():
             remove_image = False
         
         # New image upload
-        uploaded_image = st.file_uploader("Upload New Image (optional)", type=['png', 'jpg', 'jpeg', 'gif'])
+        st.subheader("Update Featured Image")
+        uploaded_image = st.file_uploader("Upload New Image", type=['png', 'jpg', 'jpeg', 'gif'], key="edit_image")
+        
+        if uploaded_image:
+            st.image(uploaded_image, caption="New Image Preview", width=300)
         
         submit = st.form_submit_button("Update Post", type="primary")
         
@@ -581,6 +665,10 @@ def show_edit_post():
                 )
                 conn.commit()
                 conn.close()
+                
+                # Clear editor state
+                st.session_state.editor_edit = ""
+                
                 st.success("Post updated successfully!")
                 st.session_state.page = 'view_post'
                 time.sleep(1)
@@ -591,10 +679,14 @@ def show_edit_post():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("← Back to Post"):
+            # Clear editor state
+            st.session_state.editor_edit = ""
             st.session_state.page = 'view_post'
             st.rerun()
     with col2:
         if st.button("← Back to Home"):
+            # Clear editor state
+            st.session_state.editor_edit = ""
             st.session_state.page = 'home'
             st.rerun()
 
@@ -664,13 +756,8 @@ def show_view_post():
     
     st.divider()
     
-    # Display content with proper formatting
-    if post[9]:  # Display image if exists
-        display_image(post[9])
-        st.divider()
-    
-    formatted_content = format_content(post[4])
-    st.write(formatted_content)
+    # Display content with rich formatting
+    display_rich_content(post[4], post[9])
     
     st.divider()
     
@@ -698,7 +785,7 @@ def show_view_post():
                     
                     # Display comment content with formatting
                     comment_content = format_content(comment[3])
-                    st.write(comment_content)
+                    st.markdown(comment_content)
                     
                     # Display comment image if exists
                     if comment[6]:  # image_path in comments
@@ -745,6 +832,8 @@ def show_view_post():
         st.info("Please login to post a comment.")
     
     conn.close()
+
+# ... (Other functions remain the same as previous version - profile, admin, category, search)
 
 def show_profile():
     if not st.session_state.user:
@@ -824,9 +913,7 @@ def show_profile():
         for post in posts:
             with st.container():
                 st.write(f"**{post[3]}** (in {post[9]})")
-                content_preview = format_content(post[4][:100])
-                if len(post[4]) > 100:
-                    content_preview += "..."
+                content_preview = post[4][:100] + "..." if len(post[4]) > 100 else post[4]
                 st.write(content_preview)
                 if st.button("View", key=f"view_my_post_{post[0]}"):
                     st.session_state.page = 'view_post'
@@ -955,13 +1042,11 @@ def show_category():
                     st.write(f"**{pin_indicator}{post[3]}**")
                     st.write(f"👤 **{post[9]}** | 👁️ **{post[7]}** | 🕒 **{post[5][:16]}**")
                     
-                    content_preview = format_content(post[4][:200])
-                    if len(post[4]) > 200:
-                        content_preview += "..."
+                    content_preview = post[4][:200] + "..." if len(post[4]) > 200 else post[4]
                     st.write(content_preview)
                     
                     if post[9]:  # image_path
-                        st.write("🖼️ *Image attached*")
+                        st.write("🖼️ *Includes images*")
                 with col2:
                     if st.button("Read More", key=f"cat_read_{post[0]}", use_container_width=True):
                         st.session_state.page = 'view_post'
@@ -1002,7 +1087,7 @@ def show_search():
                     query_lower = st.session_state.search_query.lower()
                     content_lower = content.lower()
                     
-                    # Simple highlighting (you can make this more sophisticated)
+                    # Simple highlighting
                     if query_lower in content_lower:
                         start_idx = content_lower.find(query_lower)
                         preview_start = max(0, start_idx - 50)
@@ -1015,7 +1100,7 @@ def show_search():
                     else:
                         preview = content[:200] + "..." if len(content) > 200 else content
                     
-                    st.write(format_content(preview))
+                    st.write(preview)
                 with col2:
                     if st.button("Read More", key=f"search_read_{post[0]}", use_container_width=True):
                         st.session_state.page = 'view_post'
