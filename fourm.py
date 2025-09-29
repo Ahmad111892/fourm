@@ -83,7 +83,7 @@ def setup_database():
         INSERT OR IGNORE INTO categories (id, name, description, color) VALUES
         (1, 'General', 'General discussions', '#667eea'),
         (2, 'Questions', 'Ask questions here', '#4CAF50'),
-        (3, 'Suggestions', 'Share your ideas', '#FF9800'),
+        (3, 'Suggestions', 'Share your ideas'),
         (4, 'Methods', 'Helping For Peoples', '#F44336'),
         (5, 'Tutorials', 'Step by step guides', '#9C27B0')
     ''')
