@@ -41,7 +41,6 @@ def setup_database():
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            avatar TEXT DEFAULT 'default.png',
             bio TEXT DEFAULT ''
         )
     ''')
@@ -83,20 +82,6 @@ def setup_database():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             parent_id INTEGER DEFAULT NULL,
             FOREIGN KEY (post_id) REFERENCES posts (id),
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    
-    # Likes table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS likes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_id INTEGER,
-            comment_id INTEGER,
-            user_id INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (post_id) REFERENCES posts (id),
-            FOREIGN KEY (comment_id) REFERENCES comments (id),
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
@@ -159,7 +144,7 @@ def base_template(title, content, show_header=True):
         user = get_user(get_user_id())
         user_info = f"""
         <div class="user-menu">
-            <img src="/static/avatars/{user[5]}" alt="{user[1]}" class="avatar-small">
+            <span class="avatar-icon">👤</span>
             <span>Welcome, {user[1]}!</span>
             <div class="dropdown">
                 <a href="/profile">👤 Profile</a>
@@ -262,11 +247,8 @@ def base_template(title, content, show_header=True):
                 cursor: pointer;
             }}
             
-            .avatar-small {{
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                border: 2px solid #667eea;
+            .avatar-icon {{
+                font-size: 1.5em;
             }}
             
             .dropdown {{
@@ -279,6 +261,7 @@ def base_template(title, content, show_header=True):
                 box-shadow: 0 10px 30px rgba(0,0,0,0.1);
                 display: none;
                 min-width: 150px;
+                z-index: 1000;
             }}
             
             .user-menu:hover .dropdown {{
@@ -1262,10 +1245,7 @@ class UserProfile:
             }}
             
             .avatar-large {{
-                width: 100px;
-                height: 100px;
-                border-radius: 50%;
-                border: 4px solid white;
+                font-size: 4em;
                 margin-bottom: 15px;
             }}
             
@@ -1282,6 +1262,7 @@ class UserProfile:
                 border-radius: 10px;
                 text-align: center;
                 color: #333;
+                border: 2px solid #e1e8ed;
             }}
             
             .section {{
@@ -1297,7 +1278,7 @@ class UserProfile:
         </style>
         
         <div class="profile-header">
-            <img src="/static/avatars/{user[5]}" alt="{user[1]}" class="avatar-large">
+            <div class="avatar-large">👤</div>
             <h1>{user[1]}</h1>
             <p>{user[6] or 'No bio yet'}</p>
             <p>Member since {datetime.strptime(user[5], '%Y-%m-%d %H:%M:%S').strftime('%B %Y')}</p>
@@ -1505,10 +1486,6 @@ class CategoryPosts:
         """
         
         return base_template(f"Category: {category[0]}", content)
-
-# Create static directory for avatars
-if not os.path.exists('static/avatars'):
-    os.makedirs('static/avatars')
 
 if __name__ == "__main__":
     app.run()
