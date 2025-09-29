@@ -77,7 +77,7 @@ def setup_database():
         (1, 'General', 'General discussions', '#667eea'),
         (2, 'Questions', 'Ask questions here', '#4CAF50'),
         (3, 'Suggestions', 'Share your ideas', '#FF9800'),
-        (4, 'Method', 'Public Helping Method', '#F44336')
+        (4, 'Method', 'Helping For Peoples', '#F44336')
     ''')
     
     # Create admin user if not exists
@@ -219,7 +219,6 @@ def show_home():
             if search_query:
                 st.session_state.search_query = search_query
                 st.session_state.page = 'search'
-                st.rerun()
             else:
                 st.session_state.search_query = ''
     
@@ -290,9 +289,9 @@ def show_home():
                     
                     st.write(f"👤 **{post[9]}** | 📂 **{post[10]}** | 👁️ **{post[7]}** | 💬 **{post[12]}**")
                     st.write(f"🕒 {post[5]}")
-                    # Display content with proper line breaks for preview
-                    content_preview = post[4].replace('\n', ' ')[:200] + "..."
-                    st.write(content_preview)
+                    # Display content with proper line breaks
+                    content_display = post[4].replace('\n', '  \n')
+                    st.write(content_display[:200] + "...")
                 
                 with col2:
                     if st.button("Read More", key=f"read_{post[0]}"):
@@ -535,7 +534,7 @@ def show_view_post():
     
     # Display content with proper line breaks
     content_display = post[4].replace('\n', '  \n')
-    st.markdown(content_display)
+    st.write(content_display)
     
     st.divider()
     
@@ -561,7 +560,7 @@ def show_view_post():
                 with col1:
                     st.write(f"**{comment[6]}** - {comment[4]}")
                     comment_content = comment[3].replace('\n', '  \n')
-                    st.markdown(comment_content)
+                    st.write(comment_content)
                 with col2:
                     # Delete comment button for comment owners and admins
                     if st.session_state.user and (st.session_state.user['id'] == comment[2] or st.session_state.user['role'] == 'admin'):
@@ -783,7 +782,6 @@ def show_category():
                 with col1:
                     st.write(f"**{post[3]}**")
                     st.write(f"👤 **{post[9]}** | 👁️ **{post[7]}** | 🕒 **{post[5]}**")
-                    # FIX: Replace newlines with spaces for preview
                     content_preview = post[4].replace('\n', ' ')[:200] + "..."
                     st.write(content_preview)
                 with col2:
@@ -820,11 +818,8 @@ def show_search():
                 with col1:
                     st.write(f"**{post[3]}**")
                     st.write(f"👤 **{post[9]}** | 📂 **{post[10]}** | 👁️ **{post[7]}** | 🕒 **{post[5]}**")
-                    
-                    # FIX: Replace newlines with spaces for preview in search results
                     content_preview = post[4].replace('\n', ' ')[:200] + "..."
                     st.write(content_preview)
-                    
                 with col2:
                     if st.button("Read More", key=f"search_read_{post[0]}"):
                         st.session_state.page = 'view_post'
